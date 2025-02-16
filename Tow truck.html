@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tow Truck Physics Simulator</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            display: block;
+            margin: 20px auto;
+            background-image:url('bg2.jpg');
+            background-size: cover;
+            width: 110%;
+            height: 110%;
+        }
+        .controls {
+            text-align: center;
+            margin: 10px;
+            position: fixed;
+            top: 20px;
+            left: 60px;
+            background: rgba(247, 139, 107, 0.9);
+            padding: 15px;
+            border-radius: 4px;
+            z-index: 1;
+        }
+        .input-group {
+            margin: 10px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            display: inline-block;
+        }
+        .popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255,255,255,0.9);
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            text-align: center;
+            display: none; /* Initially hidden */
+        }
+    </style>
+    <script>
+        function showPopup(workDone, power, distance) {
+            document.getElementById("finalWorkDone").textContent = workDone.toFixed(2);
+            document.getElementById("finalPower").textContent = power.toFixed(2);
+            document.getElementById("finalDistance").textContent = distance.toFixed(2);
+            
+            // Show the popup
+            document.getElementById("popup").style.display = "block";
+        }
+
+        function closePopup() {
+            document.getElementById("popup").style.display = "none";
+        }
+    </script>
+</head>
+<body>
+    <div class="controls">
+        <div class="input-group">
+            <h3>Physics Controls</h3>
+            <label>Towing Speed (m/s): <span id="speedValue">0</span></label>
+            <input type="range" id="speed" min="0" max="50" value="0" step="0.5"><br>
+            <label>Time to Travel (s): <span id="timeToTravelValue">0</span></label>
+            <input type="range" id="timeToTravel" min="5" max="30" value="0" step="1"><br>
+            <label>Tow Truck Mass (kg): <span id="truckMassValue">500</span></label>
+            <input type="range" id="truckMass" min="500" max="5000" value="0"><br>
+            <label>Car Mass (kg): <span id="carMassValue">250</span></label>
+            <input type="range" id="carMass" min="250" max="3000" value="0">
+        </div>
+        
+        <button onclick="startTowing()" style="padding: 10px 10px; margin: 10px;">Start Towing!</button>
+        <button id="toggleCarButton" onclick="toggleCar()" style="padding: 10px 10px; margin: 5px;">Remove Car</button>
+    </div>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const towTruckImage = new Image();
+        towTruckImage.src = 'tow_truck_img-removebg-preview.png'; // Replace with the path to your tow truck image
+
+        const brokenCarImage = new Image();
+        brokenCarImage.src = 'broken_car_img-removebg-preview.png'; // Replace with the path to your broken car image
+
+        class Vehicle {
+            constructor(x, y, mass, width, height, image) {
+                this.pos = {x, y};
+                this.vel = {x: 0, y: 0};
+                this.mass = mass;
+                this.width = width;
+                this.height = height;
+                this.image = image;
+                this.wheelRotation = 0; // Add wheel rotation property
+            }
+
+            update(dt) {
+                this.pos.x += this.vel.x * dt;
+                this.wheelRotation += this.vel.x * dt / 10; // Update wheel rotation based on velocity
+            }
+
+            getKineticEnergy() {
+                return 0.5 * this.mass * this.vel.x * this.vel.x;
+            }
+        }
+
+        function drawVehicles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw tow truck
+            ctx.drawImage(towTruck.image, towTruck.pos.x, towTruck.pos.y, towTruck.width, towTruck.height);
+            [29, 125].forEach(xOffset => {
+                drawWheel(towTruck.pos.x + xOffset, 338, 18, towTruck.wheelRotation); // Adjusted y to touch road
+            });
+
+            if (isCarAttached) {
+                // Save the current context state
+                ctx.save();
+
+                // Move the context to the center of the broken car
+                ctx.translate(brokenCar.pos.x + brokenCar.width / 2, brokenCar.pos.y + brokenCar.height / 2);
+
+                // Rotate the context by 330 degrees
+                ctx.rotate(350 * Math.PI / 180);
+
+                // Draw the broken car image, adjusting for the translation
+                ctx.drawImage(brokenCar.image, -brokenCar.width / 2, -brokenCar.height / 2, brokenCar.width, brokenCar.height);
+                
+                // Restore the context to its original state
+                ctx.restore();
+
+                // Draw rope
+                ctx.beginPath();
+                ctx.moveTo(brokenCar.pos.x + brokenCar.width / 1.2, brokenCar.pos.y + brokenCar.height / 2.5);
+                ctx.lineTo(towTruck.pos.x + towTruck.width/6, towTruck.pos.y + towTruck.height / 10);
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+        }
+
+        function drawWheel(x, y, radius, rotation) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(rotation);
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 0.7, 0, Math.PI * 2); // Reduced radius by 30%
+            ctx.fillStyle = '#444';
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 0.6 * 0.7, 0, Math.PI * 2); // Reduced radius by 30%
+            ctx.fillStyle = '#DDD';
+            ctx.fill();
+            
+            for (let i = 0; i < 6; i++) {
+                ctx.rotate(Math.PI / 3);
+                ctx.beginPath();
+                ctx.moveTo(-radius * 0.2 * 0.7, 0);
+                ctx.lineTo(radius * 0.6 * 0.7, 0);
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 3; // Reduced line width
+                ctx.stroke();
+            }
+            
+            ctx.restore();
+        }
+
+        const ropeLength = 20; // Set a constant rope length
+        const towTruck = new Vehicle(100, 265, 3500, 170, 100, towTruckImage); // Adjusted y position
+        const brokenCar = new Vehicle(towTruck.pos.x - (180 + ropeLength), 265, 4000, 180, 120, brokenCarImage); // Adjusted y position
+
+        let isMoving = false;
+        let timeElapsed = 0;
+        let startTime = null;
+        let totalWorkDone = 0;
+        let totalDistance = 0;
+        let isCarAttached = true;
+        
+        function calculatePhysics(speed, truckMass, carMass, dt) {
+            const totalMass = truckMass + (isCarAttached ? carMass : 0);
+            const friction = 0.02 * 9.81 * totalMass;
+            const force = friction;
+            
+            const distanceThisFrame = speed * dt;
+            const workDone = force * distanceThisFrame;
+            const power = force * speed;
+            
+            return {
+                workDone: workDone,
+                power: power,
+                distance: distanceThisFrame
+            };
+        }
+
+        function updatePhysics(timestamp) {
+            if (!isMoving) return;
+            if (!startTime) startTime = timestamp;
+            
+            const dt = 0.016;
+            const towingSpeed = parseFloat(document.getElementById('speed').value);
+            const targetTime = parseFloat(document.getElementById('timeToTravel').value);
+            const truckMass = parseFloat(document.getElementById('truckMass').value);
+            const carMass = parseFloat(document.getElementById('carMass').value);
+
+            towTruck.mass = truckMass;
+            if (isCarAttached) {
+                brokenCar.mass = carMass;
+            }
+
+            towTruck.vel.x = towingSpeed;
+            towTruck.update(dt);
+
+            if (isCarAttached) {
+                brokenCar.pos.x = towTruck.pos.x - (towTruck.width + ropeLength);
+                brokenCar.vel.x = towingSpeed;
+            }
+
+            timeElapsed += dt;
+
+            const physics = calculatePhysics(towingSpeed, truckMass, carMass, dt);
+            totalWorkDone += physics.workDone;
+            totalDistance += physics.distance;
+
+            updatePhysicsMeasurements(totalWorkDone, physics.power, timeElapsed);
+
+            drawVehicles();
+
+            if (timeElapsed < targetTime) {
+                requestAnimationFrame(updatePhysics);
+            } else {
+                isMoving = false;
+                showPopup(totalWorkDone, physics.power, totalDistance);
+            }
+        }
+
+        function startTowing() {
+            if (!isMoving) {
+                isMoving = true;
+                startTime = null;
+                timeElapsed = 0;
+                totalWorkDone = 0;
+                totalDistance = 0;
+                towTruck.pos.x = 100;
+                if (isCarAttached) {
+                    brokenCar.pos.x = towTruck.pos.x - (towTruck.width + ropeLength);
+                }
+                requestAnimationFrame(updatePhysics);
+            }
+        }
+
+        function toggleCar() {
+            isCarAttached = !isCarAttached;
+            document.getElementById('toggleCarButton').textContent = isCarAttached ? 'Remove Car' : 'Add Car Load';
+            drawVehicles();
+        }
+
+        ['speed', 'timeToTravel', 'truckMass', 'carMass'].forEach(id => {
+            document.getElementById(id).addEventListener('input', function() {
+                document.getElementById(id + 'Value').textContent = this.value;
+            });
+        });
+
+        towTruckImage.onload = drawVehicles;
+        brokenCarImage.onload = drawVehicles;
+    </script>
+    <div id="physicsMeasurements" style="position: fixed; top: 30px; right: 60px; background: rgba(255,255,255,0.9); padding: 5px; border-radius: 1px; z-index: 1;">
+        <h3>Physics Measurements</h3>
+        <p>Work Done (Joules): <span id="workDone">0</span> Joules</p>
+        <p>Power (Watts): <span id="power">0</span> Watts</p>
+        <p>Elapsed Time (s): <span id="elapsedTime">0</span> seconds</p>
+    </div>
+    
+    <div id="popup" class="popup">
+        <h3>Simulation Complete</h3>
+        <p>Work Done: <span id="finalWorkDone">0</span> Joules</p>
+        <p>Power: <span id="finalPower">0</span> Watts</p>
+        <p>Distance Travlled: <span id="finalDistance">0</span> meters</p>
+        <button onclick="location.reload()">Try Again</button>
+    </div>
+
+    <script>
+        function updatePhysicsMeasurements(workDone, power, elapsedTime) {
+            document.getElementById('workDone').textContent = workDone.toFixed(2);
+            document.getElementById('power').textContent = power.toFixed(2);
+            document.getElementById('elapsedTime').textContent = elapsedTime.toFixed(2);
+        }
+    </script>
+</body>
+</html>
